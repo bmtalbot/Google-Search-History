@@ -18,7 +18,6 @@ setwd()
 # LIBRARIES
 library(lubridate)
 library(rvest)
-library(tidyverse)
 library(magrittr)
 library(data.table)
 library(tidyverse)
