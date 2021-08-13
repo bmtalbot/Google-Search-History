@@ -1,0 +1,149 @@
+---
+title: "Google Search History"
+output: html_document
+---
+
+## Set working directory for folder containing your Google Search History. 
+
+For more information on how to download your history, 
+see [this how-to guide by Saúl Buentello](https://towardsdatascience.com/explore-your-activity-on-google-with-r-how-to-analyze-and-visualize-your-search-history-1fb74e5fb2b6)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd()
+```
+
+```{r}
+# LIBRARIES
+library(lubridate)
+library(rvest)
+library(tidyverse)
+library(magrittr)
+library(data.table)
+library(tidyverse)
+
+# BRING IN RAW DATA
+GoogleHTML <- "takeout-20210804T195257Z-001/Takeout/My Activity/Search/MyActivity.html"
+myGoogleSearch <- read_html(GoogleHTML, encoding = "UTF-8")
+
+
+# SCRAPPING SEARCH DATE AND TIME
+dateSearch <- myGoogleSearch %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=<br>)(.*)(?<=PM|AM)") %>%
+  mdy_hms()
+dateSearch[1:5]
+# SCRAPING SEARCH TEXT
+textSearch <- myGoogleSearch %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = '(?<=<a)(.*)(?=</a>)') %>% 
+  str_extract(pattern = '(?<=\">)(.*)')
+textSearch[1:5]
+# SCRAPING SEARCH TYPE
+searchType <- myGoogleSearch %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=mdl-typography--body-1\">)(.*)(?=<a)") %>% 
+  str_extract(pattern = "(\\w+)(?=\\s)")
+searchType[1:5]
+# CREATE DATA FRAME USING SCRAPED DATA
+searchedData <- tibble(timestamp = dateSearch,
+                      date = as_date(dateSearch),
+                      year = year(dateSearch),
+                      month = lubridate::month(dateSearch, label = TRUE),
+                      day = weekdays(dateSearch),
+                      hour = hour(dateSearch),
+                      type = searchType,
+                      search = textSearch)
+searchedData$day <- factor(searchedData$day, levels = c("Sunday", "Monday", "Tuesday", "Wednesday","Thursday", "Friday", "Saturday"))
+searchedData <- na.omit(searchedData)
+
+ 
+# CREATING SUBSET OF SEARCH HISTORY
+Searched <- searchedData[(searchedData$type == "Searched"),]
+
+
+# PLOTTING SEARCHES OVER TIME
+
+allSearched <- ggplot(Searched, aes(x = year)) + 
+               geom_bar(fill = "gray48") + 
+               theme_classic() +
+               labs(x= "Year", y= "Count") + 
+               ggtitle("How much do I use Google Search over time?")
+allSearched
+
+
+
+# ADDED PADDING TO FRONT AND BACK OF STRING
+## The padding is a little bit of a trick for capturing single words/letters at the start and end of searches, put in place particularly for finding searches containing "R"
+
+Searched$search <- paste(" ",Searched$search, " ", sep = "")
+
+# ASSIGNING QUESTION CATEGORY
+
+Searched <- Searched %>% mutate(Questions = case_when(str_detect(search, "how to|How to|why|Why| who | Who | when|When|what|What|where|Where|tutorial") == "TRUE" ~ 1, TRUE ~ 0)) %>% mutate(Questions = as.factor(Questions))
+
+
+# SUMMARIZE THE DATA
+Searched_Q_Sum <- Searched %>% group_by(year, month, day, Questions) %>% summarise(n = n()) 
+
+# PLOT QUESTIONS
+questionsSearched <- ggplot(Searched_Q_Sum, aes(x = year, y=n, fill=Questions)) + 
+                     geom_bar(position="stack", stat="identity") +
+                     theme_classic() +
+                     scale_fill_discrete(type = c("gray48","darkolivegreen2"),name = "Question Search", labels = c("No", "Yes")) +
+                     labs(x= "Year", y= "Count") + 
+                     ggtitle("How often do I ask Professor Google a question?")
+questionsSearched
+
+
+#SETTING UP COMPUTATIONAL VARIABLE
+
+Searched <- Searched %>% mutate(Computational = case_when(str_detect(search, " r |axis|data|graph|Graph|label|plot|phylogenetic|vim|code| in r |unix|grep|linux|unix|commandline|ggtree|ggplot|vector|bash|invariant sites|fastq|fasta|sas|SAS|shell script|matrix| R|rmarkdown|alignment|gunzip|gzip|untar|conda|sql|iqtree|gz file|shortbred|github|command| row|python|software|calculate|incidence|odds ratio|tableau|endnote|snippy-core|.sh|qsub|compare|citations|consensus|consensus tree| png |robinson-| fna |n50|google search|browsing|fastly| median |heatmap|brewer.pal|sequence file|newscale fill|vcf|CFML|unite function| cp |SNP|dirpath| awk | vi |.exe|binary file|bam file|bootstrap value|ubuntu|control c|metagenomic|paired end reads|bowtie1|bowtie2| excel |Use_Dev|snippy|YAML|travis| gbk |unit test|variant calling|biobakery|statistical power|treeio|json|xmfa| tar |disty|parsnp|gingr|harvest tools|jupyter| wsl |confidence intervals|power calculations|maximum likelihood| proc |mantel haenszel|knit to powerpoint|xml|tidyverse| irr |powerpoint|t-test|download|iqr|attack rate|nodupkey|pdf|stdev.s|set statements|access=read| e value|MAVEN|maven|DCPHIS|propensity score|$500.|best32|positive predictive value|attributable risk|effect measure modification| translate a page|prevalence ratio| bic number|negative predictive|NPV|image j|imageJ|P drive|I drive|heading error|\r|parallel|bioinformatics|genbank") == "TRUE" & Questions == 1 ~ 1, TRUE ~ 0)) %>% mutate(Computational = as.factor(Computational))
+
+# NEW SUMMARY OF DATA
+Searched_C_Sum <- Searched %>% group_by(year, month, day, Questions, Computational) %>% summarise(n = n()) 
+
+# PLOTTING COMPUTATIONAL QUESTIONS
+computationalQs <- ggplot(Searched_C_Sum[which(Searched_C_Sum$Questions=="1"),], aes(x = year, y=n, fill=Computational)) + 
+                     geom_bar(position="stack", stat="identity") +
+                     theme_classic() +
+                     scale_fill_discrete(type = c("gray48","darkolivegreen2"), name = "Computational Question", labels = c("No", "Yes")) +
+                     labs(x= "Year", y= "Count") + 
+                     ggtitle("How often am I asking for computational help from Professor Google?")
+computationalQs
+
+
+#COMPUTATIONAL QUESTIONS BY DAY
+
+ComputationalQsDay <- ggplot(Searched_C_Sum[which(Searched_C_Sum$Questions=="1"),], aes(x = day, y=n, fill=Computational)) + 
+                     geom_bar(position="stack", stat="identity") +
+                     theme_classic() +
+                     scale_fill_discrete(type = c("gray48","darkolivegreen2"), name = "Computational Question", labels = c("No", "Yes")) +
+                     labs(x= "Weekday", y= "Count") + 
+                     ggtitle("How often do I ask for computational help by weekday?")
+ComputationalQsDay
+
+
+# AND BREAKING OUT COMPUTATIONAL QUESTIONS BY MONTH IN THE YEAR 2020
+
+Day_years  <- ggplot(Searched_C_Sum[which(Searched_C_Sum$Questions=="1" & Searched_C_Sum$year %in% c("2020")),], aes(x = day, y=n, fill=Computational)) + geom_bar(position="stack", stat="identity") + 
+  facet_wrap(vars(month)) + 
+  theme_classic() +
+  theme(strip.background = element_blank(), 
+        axis.text = element_text(size = 10), 
+        strip.text.x = element_text(size = 12, face = "bold"), 
+        title = element_text(size = 16)) +                                                   
+  scale_x_discrete(labels = c("Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat")) +
+  scale_fill_discrete(type = c("gray48","darkolivegreen2"), name = "Computational Question", labels = c("No", "Yes")) +
+  labs(x= "Weekday", y= "Count", title = "What days did I ask a computational quesiton in 2020?" ) 
+
+# SILLY LABEL ANNOTATION
+ann_text <- data.frame(day = "Wednesday", n = 29 ,lab = "Text",
+                      month = factor("Sep", levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")), Computational = factor("0", levels = c("0","1")))
+
+Day_years + geom_label(data = ann_text,label = "Seriously, what is Bioconda?", size = 4, show.legend = FALSE, fill = "white" )
+
+
+```
+
