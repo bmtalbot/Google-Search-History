@@ -5,7 +5,7 @@ output: html_document
 
 ## Set working directory for folder containing your Google Search History. 
 
-For more information on how to download your history, 
+For more information on how to download your history and scraping the data to create a datatable, 
 see [this how-to guide by Saúl Buentello](https://towardsdatascience.com/explore-your-activity-on-google-with-r-how-to-analyze-and-visualize-your-search-history-1fb74e5fb2b6)
 
 ```{r setup, include=FALSE}
@@ -22,42 +22,12 @@ library(magrittr)
 library(data.table)
 library(tidyverse)
 
-# BRING IN RAW DATA
-GoogleHTML <- "takeout-20210804T195257Z-001/Takeout/My Activity/Search/MyActivity.html"
-myGoogleSearch <- read_html(GoogleHTML, encoding = "UTF-8")
+For more information on how to download your history and scraping the data to create a datatable, 
+see [this how-to guide by Saúl Buentello](https://towardsdatascience.com/explore-your-activity-on-google-with-r-how-to-analyze-and-visualize-your-search-history-1fb74e5fb2b6)
 
+# POINT TO YOUR SCRAPED GOOGLE HISTORY DATA 
+# My scraped data is searchedData
 
-# SCRAPPING SEARCH DATE AND TIME
-dateSearch <- myGoogleSearch %>% 
-  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
-  str_extract(pattern = "(?<=<br>)(.*)(?<=PM|AM)") %>%
-  mdy_hms()
-dateSearch[1:5]
-# SCRAPING SEARCH TEXT
-textSearch <- myGoogleSearch %>% 
-  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
-  str_extract(pattern = '(?<=<a)(.*)(?=</a>)') %>% 
-  str_extract(pattern = '(?<=\">)(.*)')
-textSearch[1:5]
-# SCRAPING SEARCH TYPE
-searchType <- myGoogleSearch %>% 
-  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
-  str_extract(pattern = "(?<=mdl-typography--body-1\">)(.*)(?=<a)") %>% 
-  str_extract(pattern = "(\\w+)(?=\\s)")
-searchType[1:5]
-# CREATE DATA FRAME USING SCRAPED DATA
-searchedData <- tibble(timestamp = dateSearch,
-                      date = as_date(dateSearch),
-                      year = year(dateSearch),
-                      month = lubridate::month(dateSearch, label = TRUE),
-                      day = weekdays(dateSearch),
-                      hour = hour(dateSearch),
-                      type = searchType,
-                      search = textSearch)
-searchedData$day <- factor(searchedData$day, levels = c("Sunday", "Monday", "Tuesday", "Wednesday","Thursday", "Friday", "Saturday"))
-searchedData <- na.omit(searchedData)
-
- 
 # CREATING SUBSET OF SEARCH HISTORY
 Searched <- searchedData[(searchedData$type == "Searched"),]
 
